@@ -12,7 +12,7 @@ public class MainMenuController : MonoBehaviour
     public TextElement errorMessageLabel;
 
     [SerializeField]
-    public GameObject uiController;
+    private GameObject uiController;
 
     private void Awake() {
         ui = GetComponent<UIDocument>().rootVisualElement;

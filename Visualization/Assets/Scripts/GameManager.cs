@@ -6,7 +6,7 @@ using UnityEngine;
 public class GameManager : MonoBehaviour {
 
     [SerializeField]
-    public GameObject carAgentPrefab;
+    private GameObject carAgentPrefab;
 
     void Awake() {
         TCPClient.Instance.OnRecv += OnServerMessage;

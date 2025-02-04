@@ -1,8 +1,8 @@
-from model import CityModel
 from socket import socket, AF_INET, SOCK_STREAM
 from messages import Commands as cmds
 from messages import SimState
 import struct
+from model import CityModel
 
 HOST = '127.0.0.1'
 PORT = 42069
@@ -40,7 +40,9 @@ def main():
     server.listen()
 
     # Wait for a connection
+    print('Waiting for connection')
     client, _ = server.accept()
+    print('Client connected')
 
     while True:
         # Read messages until the connection is closed
@@ -52,9 +54,9 @@ def main():
         # Handle message
         OnMessage(data.decode('utf-8'), client)
     
-    # Cleanup
-    client.close()
-    server.close()
+#     # Cleanup
+#     client.close()
+#     server.close()
 
 
 if __name__ == '__main__':
