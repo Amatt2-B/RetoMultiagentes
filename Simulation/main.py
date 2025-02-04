@@ -2,16 +2,12 @@ from socket import socket, AF_INET, SOCK_STREAM
 from messages import Commands as cmds
 from messages import SimState
 import struct
-from model import CityModel
+from model import CityModel, params
 
 HOST = '127.0.0.1'
 PORT = 42069
 
-# params = {
-#     'roads': 
-# }
-
-model = CityModel()
+model = CityModel(params)
 
 def ModelStateMessage():
     # Serialize the state to JSON

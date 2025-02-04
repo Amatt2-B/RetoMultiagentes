@@ -14,5 +14,6 @@ namespace Messages {
         public int[] dims;
         public float[][] grid;
         public AgentData[] agents;
+        public int[] deleted;
     }
 }

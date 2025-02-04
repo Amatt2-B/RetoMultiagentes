@@ -6,7 +6,15 @@ using UnityEngine;
 public class GameManager : MonoBehaviour {
 
     [SerializeField]
-    private GameObject carAgentPrefab;
+    GameObject carAgentPrefab;
+
+    [SerializeField]
+    GameObject pedestrianAgentPrefab;
+
+    [SerializeField]
+    float stepInterval = 0.5f;
+
+    float time;
 
     void Awake() {
         TCPClient.Instance.OnRecv += OnServerMessage;
@@ -38,11 +46,20 @@ public class GameManager : MonoBehaviour {
                     agent.SetMoveTo(v);
                 } else {
                     // TODO: handle different agent types
-                    GameObject newAgent = Instantiate(carAgentPrefab, v, Quaternion.identity);
+                    var prefab = agentData.type == "car" ? carAgentPrefab : pedestrianAgentPrefab;
+                    GameObject newAgent = Instantiate(prefab, v, Quaternion.identity);
                     agent = newAgent.GetComponent<Agent>();
                     agent.Init(agentData.id, v);
                     agents[agentData.id] = agent;
                 }
+            }
+
+            foreach (int id in simstate.deleted) {
+                if (agents.TryGetValue(id, out Agent agent)) {
+                    agents.Remove(id);
+                    Destroy(agent.gameObject);
+                }
+                
             }
         });
     }
@@ -58,6 +75,14 @@ public class GameManager : MonoBehaviour {
         while(syncQueue.Count > 0) {
             var action = syncQueue.Dequeue();
             action?.Invoke();
+        }
+
+        if(initialized) {
+            time += Time.deltaTime;
+            while(time >= stepInterval) {
+                TCPClient.Instance.Send("step");
+                time -= stepInterval;
+            }
         }
     }
 

@@ -15,11 +15,13 @@ class SimState(Encodable):
     dims: tuple
     agents: list
     grid: list
+    deleted: list
 
     @staticmethod
     def fromModel(model: CityModel):
         return SimState(
             dims=model.env.shape,
             agents=model.agents,
-            grid=model.env.tiles.tolist(),
+            grid=model.env.road.tolist(),
+            deleted=model.deleted,
         )
