@@ -6,7 +6,7 @@ from modelmap import *
 class Agent(ap.Agent, Encodable):
     def __init__(self, model, *args, **kwargs):
         super().__init__(model, *args, **kwargs)
-        self.model: CityModel # Just for typings
+        self.model: CityModel  # Just for typings
         self.env: CityEnv = model.env
         # self.agentType = 'agent' if self.agentType is None else self.agentType
 
@@ -16,14 +16,14 @@ class Agent(ap.Agent, Encodable):
             'pos': self.getPos(),
             'type': self.agentType,
         }
-    
+
     def getPos(self) -> tuple[int, int]:
         return self.model.env.positions[self]
-    
-    def isAtBoundary(self):
+
+    def isEdging(self):
         x, y = self.getPos()
         r, c = self.env.shape
-        return x <= 0 or y <= 0 or x+1 >= r or y+1 >= c
+        return x <= 0 or y <= 0 or x + 1 >= r or y + 1 >= c
 
     def isOccupied(self, move):
         """Verifica si una celda está ocupada por otro agente."""
@@ -58,22 +58,19 @@ class CarAgent(Agent):
         if dir & ND:
             move = (x-1, y)
             if self.canCross(move):
-                moves.append(move) # North
-            
+                moves.append(move)  # North
         if dir & SD:
             move = (x+1, y)
             if self.canCross(move):
-                moves.append(move) # South
-
+                moves.append(move)  # South
         if dir & ED:
             move = (x, y+1)
             if self.canCross(move):
-                moves.append(move) # East
-            
+                moves.append(move)  # East
         if dir & WD:
             move = (x, y-1)
             if self.canCross(move):
-                moves.append(move) # West
+                moves.append(move)  # West
 
         return moves
 
@@ -115,19 +112,17 @@ class PedestrianAgent(Agent):
         cr += x1
         cc += y1
 
-        cross = list(filter( lambda x: self.canCross(x), list(zip(cr, cc))))
-        
-        return coords + cross
+        cross = list(filter(lambda x: self.canCross(x), list(zip(cr, cc))))
 
+        return coords + cross
 
 class LightSystem():
     def __init__(self, lights):
         self.groups = [[group, -1] for group in lights]
-        self.crossings = { }
+        self.crossings = {}
         self.step()
 
     def step(self):
-        # TODO: There has to be a better way to do this idk
         for idx, (group, greenIdx) in enumerate(self.groups):
             greenIdx = (greenIdx + 1) % len(group)
             self.groups[idx][1] = greenIdx
@@ -148,16 +143,15 @@ class CityEnv(ap.Grid):
     def getDir(self, agent: Agent):
         return self.dir[agent.getPos()]
 
-
 class CityModel(ap.Model):
     def setup(self):
         self.p.road = np.pad(self.p.road, 1, 'edge')
         self.p.dir = np.pad(self.p.dir, 1)
-
         self.env = CityEnv(self, self.p.road.shape)
+
         self.agents: list[Agent]
         self.agents, agentPos = self.GenAgents(
-            numCars=self.p.numCars, 
+            numCars=self.p.numCars,
             numPed=self.p.numPedestrians
         )
         self.env.add_agents(self.agents, positions=agentPos)
@@ -181,19 +175,19 @@ class CityModel(ap.Model):
         for _ in pedPos:
             agents.append(PedestrianAgent(self))
 
-
         return agents, (carPos + pedPos)
 
     def step(self):
-        # Step traffic ligths every 8 steps
         if self.t % 8 == 0:
             self.env.lights.step()
+
         alive = []
         deleted: list[Agent] = []
+
         for agent in self.agents:
             agent.update()
 
-            if agent.isAtBoundary():
+            if agent.isEdging():
                 deleted.append(agent)
             else:
                 alive.append(agent)
