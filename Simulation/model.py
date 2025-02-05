@@ -33,11 +33,12 @@ class Agent(ap.Agent, Encodable):
         return x <= 0 or y <= 0 or x+1 >= r or y+1 >= c
 
     def isOccupied(self, move):
-        """Verifica si una celda está ocupada por otro agente."""
+        """Verifica si una celda está ocupada por otro agente, incluidos peatones."""
         for agent in self.model.agents:
             if agent.getPos() == move:
                 return True
         return False
+
     
     def set_new_goal(self):
         """Establece un nuevo objetivo aleatorio válido"""
@@ -122,13 +123,43 @@ class PedestrianAgent(Agent):
 
         next_pos = self.current_path[1]  # Tomamos el siguiente punto en el camino
         
-        # Verificar si podemos movernos a la siguiente posición
-        if not self.isOccupied(next_pos) and (
-            ((self.env.road[next_pos] & RC) != RC) or 
-            self.canCross(next_pos)
-        ):
-            self.env.move_to(self, next_pos)
-            self.current_path.pop(0)  # Removemos la posición actual
+        # Actualizamos la intención (por ejemplo, indicamos el siguiente objetivo)
+        self.intention = next_pos
+
+        # Si la siguiente posición está ocupada, intentamos movernos hacia atrás
+        if self.isOccupied(next_pos):
+            # Intentamos retroceder a la posición anterior
+            previous_pos = self.current_path[0]
+            # Verificamos si la posición anterior está libre
+            if not self.isOccupied(previous_pos):
+                self.env.move_to(self, previous_pos)
+                self.current_path.pop(1)  # Removemos la posición actual
+                return
+            else:
+                # Si no se puede retroceder, intentamos una nueva posición aleatoria
+                self.set_new_goal()
+                return
+
+        # Si no hay obstáculos, continuamos con el movimiento
+        self.env.move_to(self, next_pos)
+        self.current_path.pop(0)  # Removemos la posición actual
+
+            # Aquí podrías comunicar la intención a otros agentes si lo deseas
+        self.communicate_intention(next_pos)
+
+    def communicate_intention(self, next_pos):
+        """Método para comunicar la intención de movimiento a otros agentes"""
+        for agent in self.model.agents:
+            if isinstance(agent, PedestrianAgent) and agent.getPos() == next_pos:
+                print(f"Peatón {self.id} espera a peatón {agent.id} para moverse")
+                return  # Se detiene si el siguiente peatón está en el camino
+
+
+    def is_nearby(self, agent):
+        """Determina si otro agente está cerca del peatón"""
+        x1, y1 = self.getPos()
+        x2, y2 = agent.getPos()
+        return abs(x1 - x2) <= 1 and abs(y1 - y2) <= 1  # Definir cercanía
 
     def canCross(self, move):
         tile = self.env.road[move]

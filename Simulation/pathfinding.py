@@ -8,6 +8,7 @@ class PathFinder:
         self.road_map = road_map
         self.directions = directions
         self.rows, self.cols = road_map.shape
+        self.crossing_agents = {}  # Diccionario para almacenar agentes en los cruces
 
     def get_valid_neighbors(self, pos: Tuple[int, int], is_pedestrian: bool) -> List[Tuple[int, int]]:
         x, y = pos
@@ -35,6 +36,22 @@ class PathFinder:
                 
         return neighbors
 
+    
+    
+    def is_crossing(self, pos: Tuple[int, int]) -> bool:
+        # Aquí se puede verificar si la celda es un cruce (en tu caso, podría ser un cruce de banqueta)
+        return (self.road_map[pos[0], pos[1]] & RC) == RC
+
+    def register_agent_at_crossing(self, agent):
+        """
+        Registra un agente que llega a un cruce.
+        """
+        pos = agent.current_position
+        if self.is_crossing(pos):  # Verifica si la celda es un cruce
+            if pos not in self.crossing_agents:
+                self.crossing_agents[pos] = []
+            self.crossing_agents[pos].append(agent)
+            
     def heuristic(self, a: Tuple[int, int], b: Tuple[int, int]) -> float:
         return abs(a[0] - b[0]) + abs(a[1] - b[1])  # Manhattan distance
 
