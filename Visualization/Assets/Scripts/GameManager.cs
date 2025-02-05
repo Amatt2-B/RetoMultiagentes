@@ -6,10 +6,10 @@ using UnityEngine;
 public class GameManager : MonoBehaviour {
 
     [SerializeField]
-    GameObject carAgentPrefab;
+    GameObject[] carAgentPrefabs; // Array of car prefabs
 
     [SerializeField]
-    GameObject pedestrianAgentPrefab;
+    GameObject[] pedestrianAgentPrefabs; // Array of pedestrian prefabs
 
     [SerializeField]
     float stepInterval = 0.5f;
@@ -45,8 +45,16 @@ public class GameManager : MonoBehaviour {
                 if (agents.TryGetValue(agentData.id, out Agent agent)) {
                     agent.SetMoveTo(v);
                 } else {
-                    // TODO: handle different agent types
-                    var prefab = agentData.type == "car" ? carAgentPrefab : pedestrianAgentPrefab;
+                    GameObject prefab;
+                    if (agentData.type == "car") {
+                        // Randomly select a car prefab
+                        int randomIndex = UnityEngine.Random.Range(0, carAgentPrefabs.Length);
+                        prefab = carAgentPrefabs[randomIndex];
+                    } else {
+                        // Randomly select a pedestrian prefab
+                        int randomIndex = UnityEngine.Random.Range(0, pedestrianAgentPrefabs.Length);
+                        prefab = pedestrianAgentPrefabs[randomIndex];
+                    }
                     GameObject newAgent = Instantiate(prefab, v, Quaternion.identity);
                     agent = newAgent.GetComponent<Agent>();
                     agent.Init(agentData.id, v);

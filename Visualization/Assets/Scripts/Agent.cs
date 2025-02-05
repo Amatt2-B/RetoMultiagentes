@@ -7,10 +7,12 @@ public class Agent : MonoBehaviour
     private Vector3 moveTo;
     private Vector3 oldPos;
     private float interpolationSpeed = 5.0f;
-    private static float agentRadius = 1f;  // Ajusta el radio según el tamaño de tus agentes
-    private static float avoidDistance = 1.5f;  // Distancia mínima de colisión entre agentes
+    private static float agentRadius = 1f;  // Ajusta el radio segï¿½n el tamaï¿½o de tus agentes
+    private static float avoidDistance = 1.5f;  // Distancia mï¿½nima de colisiï¿½n entre agentes
 
-    // Lista estática de todos los agentes
+    private float rotationSpeed = 10.0f; // Add rotation speed control
+
+    // Lista estï¿½tica de todos los agentes
     private static List<Agent> allAgents = new List<Agent>();
 
     public void Init(int id, Vector3 startPosition)
@@ -20,7 +22,7 @@ public class Agent : MonoBehaviour
         moveTo = startPosition;
         transform.position = startPosition;
 
-        // Añadir este agente a la lista de agentes
+        // Aï¿½adir este agente a la lista de agentes
         allAgents.Add(this);
     }
 
@@ -32,32 +34,46 @@ public class Agent : MonoBehaviour
 
     void Update()
     {
-        // Verificar si la posición a la que se moverá el agente está ocupada
+        // Verificar si la posiciï¿½n a la que se moverï¿½ el agente estï¿½ ocupada
         if (!IsPositionOccupied(moveTo))
         {
+            // Move position
             transform.position = Vector3.Lerp(transform.position, moveTo, Time.deltaTime * interpolationSpeed);
+            
+            // Calculate direction
+            Vector3 direction = (moveTo - transform.position);
+            
+            // Only rotate if we're actually moving
+            if (direction.magnitude > 0.01f)
+            {
+                // Calculate target rotation
+                Quaternion targetRotation = Quaternion.LookRotation(direction);
+                
+                // Smoothly rotate
+                transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, Time.deltaTime * rotationSpeed);
+            }
         }
     }
 
     private bool IsPositionOccupied(Vector3 targetPosition)
     {
-        // Compara la posición de este agente con los demás agentes
+        // Compara la posiciï¿½n de este agente con los demï¿½s agentes
         foreach (Agent agent in allAgents)
         {
-            // Ignora la comparación consigo mismo
+            // Ignora la comparaciï¿½n consigo mismo
             if (agent.id == this.id) continue;
 
             // Verificar si el agente ha sido destruido
             if (agent == null) continue;
 
-            // Verifica si el agente está cerca de la posición de destino
+            // Verifica si el agente estï¿½ cerca de la posiciï¿½n de destino
             float distance = Vector3.Distance(agent.transform.position, targetPosition);
             if (distance < avoidDistance)
             {
-                return true; // La posición está ocupada
+                return true; // La posiciï¿½n estï¿½ ocupada
             }
         }
-        return false; // La posición está libre
+        return false; // La posiciï¿½n estï¿½ libre
     }
 
 }
