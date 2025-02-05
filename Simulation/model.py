@@ -20,7 +20,10 @@ class Agent(ap.Agent, Encodable):
     def getPos(self) -> tuple[int, int]:
         return self.model.env.positions[self]
     
-    def isAtBoundary(self):
+    def isOutOfBounds(self):
+        '''
+        Check if the agent is in the borders of its environment
+        '''
         x, y = self.getPos()
         r, c = self.env.shape
         return x <= 0 or y <= 0 or x+1 >= r or y+1 >= c
@@ -35,29 +38,16 @@ class Agent(ap.Agent, Encodable):
 class CarAgent(Agent):
     def setup(self):
         self.agentType = 'car'
-        self.is_waiting = False  # Track if the car is waiting at a red light
 
     def update(self):
         moves = self.getRoads()
 
         if len(moves) != 0:
-            # Check if the car is waiting at a red light
-            if self.is_waiting:
-                # If the light is still red, do nothing
-                if not self.canCross(self.getPos()):
-                    return
-                else:
-                    self.is_waiting = False  # Light turned green, start moving
-
-            # Filter available moves
+            # Filtra los movimientos ocupados
             available_moves = [move for move in moves if not self.isOccupied(move)]
             if available_moves:
                 choice = self.model.random.choice(available_moves)
-                # Check if the chosen move is allowed (light is green)
-                if self.canCross(choice):
-                    self.env.move_to(self, choice)
-                else:
-                    self.is_waiting = True  # Light is red, stop and wait
+                self.env.move_to(self, choice)
 
     def canCross(self, move):
         tile = self.env.road[move]
@@ -134,26 +124,29 @@ class PedestrianAgent(Agent):
 
 
 class LightSystem():
-    def __init__(self, lights, green_duration=10, red_duration=10):
+    def __init__(self, lights):
+        # Each light group will have the light ids and the current index for the
+        # green light
         self.groups = [[group, -1] for group in lights]
         self.crossings = { }
-        self.green_duration = green_duration
-        self.red_duration = red_duration
-        self.timers = {lightID: 0 for group in lights for lightID in group}
         self.step()
 
     def step(self):
+        # TODO: There has to be a better way to do this idk
         for idx, (group, greenIdx) in enumerate(self.groups):
+            # Increment the green index and wrap around
             greenIdx = (greenIdx + 1) % len(group)
+            # Update the green index
             self.groups[idx][1] = greenIdx
 
+            # Update the lights dictionary
             for i, lightID in enumerate(group):
-                state = 'green' if greenIdx == i else 'red'
-                self.crossings[lightID] = state
-                self.timers[lightID] = self.green_duration if state == 'green' else self.red_duration
+                self.crossings[lightID] = 'green' if greenIdx == i else 'red'
 
     def getState(self, ID):
+        # Ignore the first 16 most significant bits
         ID = ID & 0xffff0000
+        # If there is no ID associated with the tile just return green
         return self.crossings.get(ID, 'green')
 
 class CityEnv(ap.Grid):
@@ -168,6 +161,7 @@ class CityEnv(ap.Grid):
 
 class CityModel(ap.Model):
     def setup(self):
+        # Pad the environment for despawn purposes
         self.p.road = np.pad(self.p.road, 1, 'edge')
         self.p.dir = np.pad(self.p.dir, 1)
 
@@ -180,44 +174,95 @@ class CityModel(ap.Model):
         self.env.add_agents(self.agents, positions=agentPos)
         self.deleted = []
 
+        # Add a counter for spawning new cars
+        self.car_spawn_counter = 0
+
     def GenAgents(self, numCars, numPed):
-        roads = list(zip(*np.where((self.env.road & RO) == RO)))
-        sidewalks = list(zip(*np.where((self.env.road & SI) == SI)))
-
+        '''
+        Initialize the agents and place them on random tiles they can walk on
+        '''
+        # Get all possible positions on the roads
+        roads = list(zip(*np.where((self.env.road & RO) == RO)))  # Road tiles
+        
+        # Exclude positions that are directly on the edge of the grid
+        # Only include positions that are at least one step inward from the edges
+        roads = [(x, y) for x, y in roads if 1 <= x < self.env.road.shape[0] - 1 and 1 <= y < self.env.road.shape[1] - 1]
+        
+        # Shuffle the roads for random distribution
         self.random.shuffle(roads)
-        self.random.shuffle(sidewalks)
 
+        # Limit the number of cars to numCars
         carPos = roads[:numCars]
+
+        # Use the existing logic for pedestrians (sidewalks)
+        sidewalks = list(zip(*np.where((self.env.road & SI) == SI)))  # Sidewalk tiles
+        self.random.shuffle(sidewalks)
         pedPos = sidewalks[:numPed]
 
+        # Create agents
         agents = []
 
+        # Create car agents at selected positions
         for _ in carPos:
             agents.append(CarAgent(self))
 
+        # Create pedestrian agents at selected positions
         for _ in pedPos:
             agents.append(PedestrianAgent(self))
 
-
         return agents, (carPos + pedPos)
 
+
+
+
     def step(self):
-        # Step traffic ligths every 8 steps
+        # Step traffic lights every 8 steps
         if self.t % 8 == 0:
             self.env.lights.step()
+
+        # Spawn a new car every 5 steps
+        self.car_spawn_counter += 1
+        if self.car_spawn_counter % 5 == 0:
+            self.spawn_new_car()
+
         alive = []
         deleted: list[Agent] = []
         for agent in self.agents:
             agent.update()
 
-            if agent.isAtBoundary():
+            # Despawn agents on the edges
+            if agent.isOutOfBounds():
                 deleted.append(agent)
             else:
                 alive.append(agent)
 
         self.env.remove_agents(deleted)
         self.agents = alive
+        # Save the deleted agents IDs to send later to the simulation
         self.deleted = [x.id for x in deleted]
+
+    def spawn_new_car(self):
+        '''
+        Spawns a new car agent at a valid road position.
+        '''
+        # Get all valid road positions (excluding edges)
+        roads = list(zip(*np.where((self.env.road & RO) == RO)))
+        roads = [(x, y) for x, y in roads if 1 <= x < self.env.road.shape[0] - 1 and 1 <= y < self.env.road.shape[1] - 1]
+
+        if roads:  # Ensure there are valid positions available
+            # Choose a random position for the new car
+            new_pos = self.random.choice(roads)
+
+            # Create the new car agent
+            new_car = CarAgent(self)
+
+            # Add the new car to the list of agents and the environment
+            self.agents.append(new_car)
+            self.env.add_agents([new_car], positions=[new_pos])
+
+            print(f"Spawned new car at position: {new_pos}")
+        else:
+            print("No valid road positions available to spawn a new car.")
 
 params = {
     'steps': 40,
