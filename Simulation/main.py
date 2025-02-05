@@ -8,7 +8,6 @@ HOST = '127.0.0.1'
 PORT = 42069
 
 model = CityModel(params)
-
 def ModelStateMessage():
     # Serialize the state to JSON
     jsonStr = SimState.fromModel(model).toJSON()

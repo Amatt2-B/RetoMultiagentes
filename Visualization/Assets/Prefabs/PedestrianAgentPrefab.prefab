@@ -844,7 +844,7 @@ GameObject:
   - component: {fileID: -4720535539113630595}
   - component: {fileID: -5787848150020150541}
   m_Layer: 0
-  m_Name: casual_Female_G
+  m_Name: PedestrianAgentPrefab
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

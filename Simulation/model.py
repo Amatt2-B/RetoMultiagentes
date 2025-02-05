@@ -1,6 +1,7 @@
 import numpy as np
 import agentpy as ap
 from utils import Encodable
+from typing import List, Tuple, Optional
 from modelmap import *
 from pathfinding import PathFinder
 
@@ -57,37 +58,59 @@ class Agent(ap.Agent, Encodable):
 class CarAgent(Agent):
     def setup(self):
         self.agentType = 'car'
-        self.is_waiting = False
-        self.set_new_goal()
 
     def update(self):
-        if not self.current_path or not self.goal:
-            self.set_new_goal()
-            return
-        
-        if len(self.current_path) <= 1:
-            self.set_new_goal()
-            return
+        moves = self.getRoads()
 
-        next_pos = self.current_path[1]  # Tomamos el siguiente punto en el camino
-        
-        # Verificar si podemos movernos a la siguiente posición
-        if not self.isOccupied(next_pos) and self.canCross(next_pos):
-            self.env.move_to(self, next_pos)
-            self.current_path.pop(0)  # Removemos la posición actual
-            self.is_waiting = False
-        else:
-            self.is_waiting = True
+        if len(moves) != 0:
+            choice = self.model.random.choice(moves)
+            self.env.move_to(self, choice)
 
     def canCross(self, move):
         tile = self.env.road[move]
-        return not (((tile & RC) == RC) and self.env.lights.getState(tile) == 'red')
+        # Checks if the tile is accessible
+        return self.env.lights.getState(tile) == 'green'
+
+    def getRoads(self):
+        dir = self.env.getDir(self)
+        moves = []
+        x, y = self.getPos()
+
+        # Check for the available moves for the current road direction
+        # FIXME: this brings the problem that an agent can do weird
+        #        if the tile has many available directions
+        #        keeping state of a previous direction and checking to avoid 
+        #        things like a 180 degree turn could be a good solution
+        if dir & ND:
+            move = (x-1, y)
+            if self.canCross(move):
+                moves.append(move) # North
+            
+        if dir & SD:
+            move = (x+1, y)
+            if self.canCross(move):
+                moves.append(move) # South
+
+        if dir & ED:
+            move = (x, y+1)
+            if self.canCross(move):
+                moves.append(move) # East
+            
+        if dir & WD:
+            move = (x, y-1)
+            if self.canCross(move):
+                moves.append(move) # West
+
+        return moves
 
 class PedestrianAgent(Agent):
     def setup(self):
         self.agentType = 'pedestrian'
+        #self.set_new_goal()
+    def initialize_goal(self):
+        """Call this method after the agent's position is set."""
         self.set_new_goal()
-
+        
     def update(self):
         if not self.current_path or not self.goal:
             self.set_new_goal()
@@ -142,6 +165,7 @@ class CityEnv(ap.Grid):
         self.road: np.ndarray = self.p.road
         self.dir: np.ndarray = self.p.dir
         self.lights = LightSystem(self.p.lights)
+        self.positions = {}  # Initialize the positions dictionary
 
     def getDir(self, agent: Agent):
         return self.dir[agent.getPos()]
@@ -172,34 +196,45 @@ class CityModel(ap.Model):
         '''
         # Get all possible positions on the roads
         roads = list(zip(*np.where((self.env.road & RO) == RO)))  # Road tiles
-        
-        # Exclude positions that are directly on the edge of the grid
-        # Only include positions that are at least one step inward from the edges
+ 
+    # Exclude positions that are directly on the edge of the grid
         roads = [(x, y) for x, y in roads if 1 <= x < self.env.road.shape[0] - 1 and 1 <= y < self.env.road.shape[1] - 1]
-        
-        # Shuffle the roads for random distribution
+ 
+    # Shuffle the roads for random distribution
         self.random.shuffle(roads)
 
-        # Limit the number of cars to numCars
+    # Limit the number of cars to numCars
         carPos = roads[:numCars]
 
-        # Use the existing logic for pedestrians (sidewalks)
+    # Use the existing logic for pedestrians (sidewalks)
         sidewalks = list(zip(*np.where((self.env.road & SI) == SI)))  # Sidewalk tiles
         self.random.shuffle(sidewalks)
         pedPos = sidewalks[:numPed]
 
-        # Create agents
+    # Create agents
         agents = []
+        agentPositions = []
 
-        # Create car agents at selected positions
-        for _ in carPos:
-            agents.append(CarAgent(self))
+    # Create car agents at selected positions
+        for pos in carPos:
+            car = CarAgent(self)
+            agents.append(car)
+            agentPositions.append(pos)
+            # Add the agent and its position to the environment's positions dictionary
+            self.env.positions[car] = pos
+            print(f"Added car agent {car.id} at position {pos}")
 
-        # Create pedestrian agents at selected positions
-        for _ in pedPos:
-            agents.append(PedestrianAgent(self))
+    # Create pedestrian agents at selected positions
+        for pos in pedPos:
+            pedestrian = PedestrianAgent(self)
+            agents.append(pedestrian)
+            agentPositions.append(pos)
+            # Add the agent and its position to the environment's positions dictionary
+            self.env.positions[pedestrian] = pos
+            print(f"Added pedestrian agent {pedestrian.id} at position {pos}")
+            pedestrian.initialize_goal()
 
-        return agents, (carPos + pedPos)
+        return agents, agentPositions
 
 
 
@@ -211,7 +246,7 @@ class CityModel(ap.Model):
 
         # Spawn a new car every 5 steps
         self.car_spawn_counter += 1
-        if self.car_spawn_counter % 5 == 0:
+        if self.car_spawn_counter % 10 == 0:
             self.spawn_new_car()
 
         alive = []
