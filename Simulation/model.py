@@ -2,19 +2,22 @@ import numpy as np
 import agentpy as ap
 from utils import Encodable
 from modelmap import *
+from pathfinding import PathFinder
 
 class Agent(ap.Agent, Encodable):
     def __init__(self, model, *args, **kwargs):
         super().__init__(model, *args, **kwargs)
-        self.model: CityModel # Just for typings
+        self.model: CityModel
         self.env: CityEnv = model.env
-        # self.agentType = 'agent' if self.agentType is None else self.agentType
+        self.current_path: List[Tuple[int, int]] = []
+        self.goal: Optional[Tuple[int, int]] = None
 
     def toObject(self):
         return {
             'id': self.id,
             'pos': self.getPos(),
             'type': self.agentType,
+            'goal': self.goal
         }
     
     def getPos(self) -> tuple[int, int]:
@@ -34,94 +37,79 @@ class Agent(ap.Agent, Encodable):
             if agent.getPos() == move:
                 return True
         return False
+    
+    def set_new_goal(self):
+        """Establece un nuevo objetivo aleatorio válido"""
+        start = self.getPos()
+        self.goal = self.model.pathfinder.find_random_valid_goal(
+            start, 
+            isinstance(self, PedestrianAgent)
+        )
+        self.current_path = self.model.pathfinder.find_path(
+            start,
+            self.goal,
+            isinstance(self, PedestrianAgent)
+        )
+        if not self.current_path:
+            self.current_path = []
+            self.goal = None
 
 class CarAgent(Agent):
     def setup(self):
         self.agentType = 'car'
+        self.is_waiting = False
+        self.set_new_goal()
 
     def update(self):
-        moves = self.getRoads()
+        if not self.current_path or not self.goal:
+            self.set_new_goal()
+            return
+        
+        if len(self.current_path) <= 1:
+            self.set_new_goal()
+            return
 
-        if len(moves) != 0:
-            # Filtra los movimientos ocupados
-            available_moves = [move for move in moves if not self.isOccupied(move)]
-            if available_moves:
-                choice = self.model.random.choice(available_moves)
-                self.env.move_to(self, choice)
+        next_pos = self.current_path[1]  # Tomamos el siguiente punto en el camino
+        
+        # Verificar si podemos movernos a la siguiente posición
+        if not self.isOccupied(next_pos) and self.canCross(next_pos):
+            self.env.move_to(self, next_pos)
+            self.current_path.pop(0)  # Removemos la posición actual
+            self.is_waiting = False
+        else:
+            self.is_waiting = True
 
     def canCross(self, move):
         tile = self.env.road[move]
         return not (((tile & RC) == RC) and self.env.lights.getState(tile) == 'red')
 
-    def getRoads(self):
-        dir = self.env.getDir(self)
-        moves = []
-        x, y = self.getPos()
-
-        if dir & ND:
-            move = (x-1, y)
-            if self.canCross(move):
-                moves.append(move) # North
-            
-        if dir & SD:
-            move = (x+1, y)
-            if self.canCross(move):
-                moves.append(move) # South
-
-        if dir & ED:
-            move = (x, y+1)
-            if self.canCross(move):
-                moves.append(move) # East
-            
-        if dir & WD:
-            move = (x, y-1)
-            if self.canCross(move):
-                moves.append(move) # West
-
-        return moves
-
 class PedestrianAgent(Agent):
     def setup(self):
         self.agentType = 'pedestrian'
+        self.set_new_goal()
 
     def update(self):
-        moves = self.getSidewalks()
+        if not self.current_path or not self.goal:
+            self.set_new_goal()
+            return
+            
+        if len(self.current_path) <= 1:
+            self.set_new_goal()
+            return
 
-        if len(moves) != 0:
-            # Filtra los movimientos ocupados
-            available_moves = [move for move in moves if not self.isOccupied(move)]
-            if available_moves:
-                choice = self.model.random.choice(available_moves)
-                self.env.move_to(self, choice)
+        next_pos = self.current_path[1]  # Tomamos el siguiente punto en el camino
+        
+        # Verificar si podemos movernos a la siguiente posición
+        if not self.isOccupied(next_pos) and (
+            ((self.env.road[next_pos] & RC) != RC) or 
+            self.canCross(next_pos)
+        ):
+            self.env.move_to(self, next_pos)
+            self.current_path.pop(0)  # Removemos la posición actual
 
     def canCross(self, move):
         tile = self.env.road[move]
         return (((tile & RC) == RC) and self.env.lights.getState(tile) == 'red')
-
-    def getSidewalks(self):
-        pos = self.getPos()
-
-        x1 = max(pos[0] - 1, 0)
-        x2 = min(pos[0] + 2, self.env.road.shape[0])
-
-        y1 = max(pos[1] - 1, 0)
-        y2 = min(pos[1] + 2, self.env.road.shape[1])
-
-        kernel = self.env.road[x1:x2, y1:y2]
-
-        rows, cols = np.where((kernel & SI) == SI)
-        rows += x1
-        cols += y1
-        coords = list(zip(rows, cols))
-
-        cr, cc = np.where((kernel & RC) == RC)
-        cr += x1
-        cc += y1
-
-        cross = list(filter( lambda x: self.canCross(x), list(zip(cr, cc))))
-        
-        return coords + cross
-
 
 class LightSystem():
     def __init__(self, lights):
@@ -158,7 +146,6 @@ class CityEnv(ap.Grid):
     def getDir(self, agent: Agent):
         return self.dir[agent.getPos()]
 
-
 class CityModel(ap.Model):
     def setup(self):
         # Pad the environment for despawn purposes
@@ -166,6 +153,8 @@ class CityModel(ap.Model):
         self.p.dir = np.pad(self.p.dir, 1)
 
         self.env = CityEnv(self, self.p.road.shape)
+        self.pathfinder = PathFinder(self.p.road, self.p.dir)
+        
         self.agents: list[Agent]
         self.agents, agentPos = self.GenAgents(
             numCars=self.p.numCars, 
