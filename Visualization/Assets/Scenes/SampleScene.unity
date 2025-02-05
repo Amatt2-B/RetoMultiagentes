@@ -13353,8 +13353,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ecfad4e558f4f454b80fb80887fd1491, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  carAgentPrefab: {fileID: 4044594078735165344, guid: d2c5bc7bbc6adb946b73c6604079af46, type: 3}
-  pedestrianAgentPrefab: {fileID: 2146930925601895398, guid: bfa1a4d27ffc58d49b76687d64b15f91, type: 3}
+  carAgentPrefabs: []
+  pedestrianAgentPrefabs: []
   stepInterval: 0.5
 --- !u!4 &1910135119
 Transform:

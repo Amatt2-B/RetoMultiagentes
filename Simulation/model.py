@@ -35,16 +35,29 @@ class Agent(ap.Agent, Encodable):
 class CarAgent(Agent):
     def setup(self):
         self.agentType = 'car'
+        self.is_waiting = False  # Track if the car is waiting at a red light
 
     def update(self):
         moves = self.getRoads()
 
         if len(moves) != 0:
-            # Filtra los movimientos ocupados
+            # Check if the car is waiting at a red light
+            if self.is_waiting:
+                # If the light is still red, do nothing
+                if not self.canCross(self.getPos()):
+                    return
+                else:
+                    self.is_waiting = False  # Light turned green, start moving
+
+            # Filter available moves
             available_moves = [move for move in moves if not self.isOccupied(move)]
             if available_moves:
                 choice = self.model.random.choice(available_moves)
-                self.env.move_to(self, choice)
+                # Check if the chosen move is allowed (light is green)
+                if self.canCross(choice):
+                    self.env.move_to(self, choice)
+                else:
+                    self.is_waiting = True  # Light is red, stop and wait
 
     def canCross(self, move):
         tile = self.env.road[move]
@@ -121,19 +134,23 @@ class PedestrianAgent(Agent):
 
 
 class LightSystem():
-    def __init__(self, lights):
+    def __init__(self, lights, green_duration=10, red_duration=10):
         self.groups = [[group, -1] for group in lights]
         self.crossings = { }
+        self.green_duration = green_duration
+        self.red_duration = red_duration
+        self.timers = {lightID: 0 for group in lights for lightID in group}
         self.step()
 
     def step(self):
-        # TODO: There has to be a better way to do this idk
         for idx, (group, greenIdx) in enumerate(self.groups):
             greenIdx = (greenIdx + 1) % len(group)
             self.groups[idx][1] = greenIdx
 
             for i, lightID in enumerate(group):
-                self.crossings[lightID] = 'green' if greenIdx == i else 'red'
+                state = 'green' if greenIdx == i else 'red'
+                self.crossings[lightID] = state
+                self.timers[lightID] = self.green_duration if state == 'green' else self.red_duration
 
     def getState(self, ID):
         ID = ID & 0xffff0000
