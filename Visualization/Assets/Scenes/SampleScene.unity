@@ -28151,7 +28151,7 @@ MonoBehaviour:
   - {fileID: 5557327951299580288, guid: 4c041857a6e2e1c4c8e475e7aa076a4b, type: 3}
   - {fileID: 5986958801767457440, guid: 1c4900659a8ec774eb041b43fe2c4136, type: 3}
   - {fileID: 2146930925601895398, guid: bfa1a4d27ffc58d49b76687d64b15f91, type: 3}
-  stepInterval: 0.5
+  stepInterval: 0.71
 --- !u!4 &1910135119
 Transform:
   m_ObjectHideFlags: 0
