@@ -77,32 +77,52 @@ class CarAgent(Agent):
         moves = []
         x, y = self.getPos()
 
-        # Check for the available moves for the current road direction
-        # FIXME: this brings the problem that an agent can do weird
-        #        if the tile has many available directions
-        #        keeping state of a previous direction and checking to avoid 
-        #        things like a 180 degree turn could be a good solution
+        primary_moves = []
+        alternative_moves = []
+
         if dir & ND:
             move = (x-1, y)
-            if self.canCross(move):
-                moves.append(move) # North
-            
+            if self.canCross(move) and self.env.road[move] != NO:
+                primary_moves.append(move)  # North
+            else:
+                # Look for an alternative lane to the left or right
+                for offset in [-1, 1]:
+                    alt_move = (x-1, y + offset)
+                    if self.canCross(alt_move) and self.env.road[alt_move] != NO:
+                        alternative_moves.append(alt_move)
+
         if dir & SD:
             move = (x+1, y)
-            if self.canCross(move):
-                moves.append(move) # South
+            if self.canCross(move) and self.env.road[move] != NO:
+                primary_moves.append(move)  # South
+            else:
+                for offset in [-1, 1]:
+                    alt_move = (x+1, y + offset)
+                    if self.canCross(alt_move) and self.env.road[alt_move] != NO:
+                        alternative_moves.append(alt_move)
 
         if dir & ED:
             move = (x, y+1)
-            if self.canCross(move):
-                moves.append(move) # East
-            
+            if self.canCross(move) and self.env.road[move] != NO:
+                primary_moves.append(move)  # East
+            else:
+                for offset in [-1, 1]:
+                    alt_move = (x + offset, y+1)
+                    if self.canCross(alt_move) and self.env.road[alt_move] != NO:
+                        alternative_moves.append(alt_move)
+
         if dir & WD:
             move = (x, y-1)
-            if self.canCross(move):
-                moves.append(move) # West
+            if self.canCross(move) and self.env.road[move] != NO:
+                primary_moves.append(move)  # West
+            else:
+                for offset in [-1, 1]:
+                    alt_move = (x + offset, y-1)
+                    if self.canCross(alt_move) and self.env.road[alt_move] != NO:
+                        alternative_moves.append(alt_move)
 
-        return moves
+        # Prioritize primary moves, but if blocked, use alternative lanes
+        return primary_moves if primary_moves else alternative_moves
 
 class PedestrianAgent(Agent):
     def setup(self):
@@ -151,7 +171,6 @@ class PedestrianAgent(Agent):
         """Método para comunicar la intención de movimiento a otros agentes"""
         for agent in self.model.agents:
             if isinstance(agent, PedestrianAgent) and agent.getPos() == next_pos:
-                print(f"Peatón {self.id} espera a peatón {agent.id} para moverse")
                 return  # Se detiene si el siguiente peatón está en el camino
 
 
@@ -253,7 +272,6 @@ class CityModel(ap.Model):
             agentPositions.append(pos)
             # Add the agent and its position to the environment's positions dictionary
             self.env.positions[car] = pos
-            print(f"Added car agent {car.id} at position {pos}")
 
     # Create pedestrian agents at selected positions
         for pos in pedPos:
@@ -262,7 +280,6 @@ class CityModel(ap.Model):
             agentPositions.append(pos)
             # Add the agent and its position to the environment's positions dictionary
             self.env.positions[pedestrian] = pos
-            print(f"Added pedestrian agent {pedestrian.id} at position {pos}")
             pedestrian.initialize_goal()
 
         return agents, agentPositions
@@ -314,10 +331,6 @@ class CityModel(ap.Model):
             # Add the new car to the list of agents and the environment
             self.agents.append(new_car)
             self.env.add_agents([new_car], positions=[new_pos])
-
-            print(f"Spawned new car at position: {new_pos}")
-        else:
-            print("No valid road positions available to spawn a new car.")
 
 params = {
     'steps': 40,
