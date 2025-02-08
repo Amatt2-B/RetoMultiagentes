@@ -81,7 +81,8 @@ public class GameManager : MonoBehaviour
                     Destroy(agent.gameObject);
                 }
 
-            }
+            }           
+
         });
     }
 
